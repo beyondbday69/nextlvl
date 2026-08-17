@@ -1,0 +1,7 @@
+{
+  "name": "nextlvl",
+  "version": "2.0.0",
+  "type": "module",
+  "private": true,
+  "description": "Lulilolo v2 - encrypted chunk pipeline: build -> deploy -> worker -> in-game loader"
+}
