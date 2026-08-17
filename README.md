@@ -33,7 +33,10 @@ aur in-game dump impossible hai (chunk source kabhi memory me nahi rehta).
 | `tool/templates/bootstrap.lua` | In-game loader (RC4, validate, fetch, poll, exec) |
 | `tool/lib/rc4.mjs` | RC4/chunkKey/xor helpers (Lua version se sync rakhna) |
 | `tool/deploy.mjs` | `dist/deploy_manifest.json` ke chunks worker pe push |
-| `src/payload_main.lua` | Real payload (menu_with_skins/1.lua ki copy) |
+| `src/payloads/1.lua` | Real payload #1 (SRCHUB menu, skins, PlayerMapMarker) |
+| `src/payloads/2.lua` | Real payload #2 (ModMenu) |
+| `src/payloads/3.lua` | Real payload #3 (OPTISKI skin system) |
+| `src/payloads/4.lua` | Real payload #4 (utility script) |
 | `src/frontend_original.lua` | Original `game_frontend_hud.lua` (anchor: `return game_frontend_hud`) |
 | `dist/` | Final build: `game_frontend_hud.lua` + `chunks/c01.lua` + manifests |
 | `tests/` | worker_test.mjs, harness.lua, crypto tests, rc4_cross.mjs |
@@ -51,16 +54,17 @@ aur in-game dump impossible hai (chunk source kabhi memory me nahi rehta).
 
 ### 2. Build
 ```
-node tool/build.mjs --payload src/payload_main.lua --host "https://<your-worker>.workers.dev" --out dist
+node tool/build.mjs --payload src/payloads/1.lua --payload src/payloads/2.lua --payload src/payloads/3.lua --payload src/payloads/4.lua --host "https://<your-worker>.workers.dev" --out dist
 ```
+- Har payload apna chunk banata hai: `c01.lua`...`c04.lua` (sab ek hi master key se encrypt).
 - Har baar naya **master key** print hota hai — **offline store karo** (yaad rahe).
-- `dist/` me: `game_frontend_hud.lua` (pak me dalna), `chunks/c01.lua` (worker pe push), `deploy_manifest.json`.
+- `dist/` me: `game_frontend_hud.lua` (pak me dalna), `chunks/c01.lua..c04.lua` (worker pe push), `deploy_manifest.json`.
 
 ### 3. Deploy chunks
 ```
 node tool/deploy.mjs --url "https://<your-worker>.workers.dev" --password <ADMIN_PASSWORD>
 ```
-Phir admin dashboard (`/admin`) → Keys → apni key pe **`c01.lua` checkbox tick** (allowed_files).
+Phir admin dashboard (`/admin`) → Keys → apni key pe **saare chunk names tick karo** (`c01.lua`, `c02.lua`, `c03.lua`, `c04.lua`).
 
 ### 4. Repack
 `dist/game_frontend_hud.lua` ko apne repack tool se game ke pak me inject karo (dumped wala file mat use karo, real file ka anchor chahiye).
