@@ -1,0 +1,23 @@
+{
+  "version": 4,
+  "mode": "text",
+  "host": "https://nextlvl.swapnilkolate044.workers.dev",
+  "chunks": [
+    {
+      "name": "c01.lua",
+      "size": 200148
+    },
+    {
+      "name": "c02.lua",
+      "size": 66119
+    },
+    {
+      "name": "c03.lua",
+      "size": 118791
+    },
+    {
+      "name": "c04.lua",
+      "size": 11763
+    }
+  ]
+}
