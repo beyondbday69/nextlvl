@@ -1,15 +1,15 @@
 {
-  "version": 5,
+  "version": 7,
   "mode": "text",
   "host": "https://nextlvl.swapnilkolate044.workers.dev",
   "chunks": [
     {
       "name": "c01.lua",
-      "size": 200148
+      "size": 210890
     },
     {
       "name": "c02.lua",
-      "size": 66119
+      "size": 67350
     },
     {
       "name": "c03.lua",

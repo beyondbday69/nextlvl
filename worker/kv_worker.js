@@ -280,6 +280,8 @@ tr:hover td{background:rgba(255,255,255,.03)}
 .file-ico{width:30px;height:30px;flex-shrink:0;border-radius:9px;background:rgba(100,210,255,.12);color:var(--blue-2);display:flex;align-items:center;justify-content:center}
 .file-ico svg{width:15px;height:15px}
 .file-name{color:var(--text);font-weight:600;font-family:'JetBrains Mono',monospace;font-size:.85rem}
+.file-cell{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.file-label{color:var(--blue-2);font-size:.72rem;font-weight:600;background:rgba(100,210,255,.12);padding:2px 8px;border-radius:99px;letter-spacing:.02em}
 .file-size{color:var(--text-dim);font-size:.82rem;font-variant-numeric:tabular-nums}
 .dcount{font-variant-numeric:tabular-nums;color:var(--text-dim)}
 .dcount b{color:var(--text)}
@@ -640,6 +642,7 @@ textarea:focus{border-color:var(--blue)}
     </div>
     <div class="modal-body">
       <div class="form-group"><label>Filename</label><input type="text" id="scriptNameInput" placeholder="e.g. main.lua"></div>
+      <div class="form-group"><label>Label</label><input type="text" id="scriptLabelInput" placeholder="e.g. c03 skin lua"></div>
       <div class="form-group">
         <label>Lua Code</label>
         <textarea id="scriptContentInput" placeholder="print('Hello World')" spellcheck="false" oninput="updateScriptCount()"></textarea>
@@ -733,7 +736,7 @@ textarea:focus{border-color:var(--blue)}
 <script>
 const API = location.origin + '/admin/api';
 const REMEMBER_KEY = 'lulilolo_admin_pwd';
-let pwd = '', keys = {}, scripts = [], editingKey = false, shareCtxKey = '', editingScriptName = null;
+let pwd = '', keys = {}, scripts = [], scriptLabels = {}, editingKey = false, shareCtxKey = '', editingScriptName = null;
 
 /* ---------- top loading bar ---------- */
 let loadDepth = 0;
@@ -987,7 +990,7 @@ function renderKeys() {
     const lifetime = isLifetimeKey(v);
     const exp = lifetime ? 'Never' : new Date(v.expiry).toLocaleDateString();
     const tag = lifetime ? { text: 'Lifetime', cls: 'exp-green' } : expiryTag(v.expiry);
-    const files = (v.allowed_files||[]).join(', ') || '—';
+    const files = (v.allowed_files||[]).map(function(f){ return scriptLabels[f] || f; }).join(', ') || '—';
     const tr = document.createElement('tr');
     tr.dataset.key = k;
     tr.dataset.status = v.active ? 'active' : 'banned';
@@ -1166,7 +1169,7 @@ function openKeyModal(editing, name) {
     const lab = document.createElement('label');
     lab.className = 'checkbox-item';
     lab.innerHTML = '<span></span><label class="toggle"><input type="checkbox" value=""><span class="track"><span class="thumb"></span></span></label>';
-    lab.querySelector('span').textContent = s.name;
+    lab.querySelector('span').textContent = (scriptLabels[s.name] ? scriptLabels[s.name] + ' (' + s.name + ')' : s.name);
     const inp = lab.querySelector('input');
     inp.value = s.name;
     inp.checked = sel.indexOf(s.name) !== -1;
@@ -1246,7 +1249,7 @@ function shareNative(){
 }
 
 /* ---------- SCRIPTS ---------- */
-async function loadScripts() { const r = await api('list_scripts'); scripts = r.scripts || []; renderScripts(); updateStats(); }
+async function loadScripts() { const r = await api('list_scripts'); scripts = r.scripts || []; scriptLabels = r.labels || {}; renderScripts(); updateStats(); }
 
 function fmtSize(bytes){
   if (bytes < 1024) return bytes + ' B';
@@ -1263,7 +1266,7 @@ function renderScripts() {
     const tr = document.createElement('tr');
     tr.dataset.name = s.name;
     tr.style.animationDelay = (idx * 35) + 'ms';
-    tr.innerHTML = '<td data-label="File"><div class="file-cell"><span class="file-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span><span class="file-name"></span></div></td>'
+    tr.innerHTML = '<td data-label="File"><div class="file-cell"><span class="file-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span><span class="file-name"></span><span class="file-label"></span></div></td>'
       +'<td data-label="Size" class="file-size">'+fmtSize(s.size)+'</td>'
       +'<td class="actions-row actions">'
         +'<button class="btn btn-icon" data-act="download" title="Download"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></button>'
@@ -1271,6 +1274,9 @@ function renderScripts() {
         +'<button class="btn btn-danger btn-sm" data-act="delete">Delete</button>'
       +'</td>';
     tr.querySelector('.file-name').textContent = s.name;
+    const lab = scriptLabels[s.name] || '';
+    const labEl = tr.querySelector('.file-label');
+    if (lab) { labEl.textContent = lab; } else { labEl.style.display = 'none'; }
     tr.querySelector('[data-act="download"]').addEventListener('click', function(){ downloadScript(s.name); });
     tr.querySelector('[data-act="edit"]').addEventListener('click', function(){ editScript(s.name); });
     tr.querySelector('[data-act="delete"]').addEventListener('click', function(){ deleteScript(s.name); });
@@ -1335,6 +1341,7 @@ function openScriptModal() {
   document.getElementById('scriptModalTitle').textContent = 'New Script';
   document.getElementById('scriptNameInput').value = '';
   document.getElementById('scriptNameInput').disabled = false;
+  document.getElementById('scriptLabelInput').value = '';
   document.getElementById('scriptContentInput').value = '';
   updateScriptCount();
   document.getElementById('scriptModal').classList.remove('hidden');
@@ -1346,6 +1353,7 @@ async function editScript(name) {
   document.getElementById('scriptModalTitle').textContent = 'Edit Script';
   document.getElementById('scriptNameInput').value = name;
   document.getElementById('scriptNameInput').disabled = true;
+  document.getElementById('scriptLabelInput').value = (scriptLabels && scriptLabels[name]) || '';
   document.getElementById('scriptContentInput').value = r.content || '';
   updateScriptCount();
   document.getElementById('scriptModal').classList.remove('hidden');
@@ -1355,10 +1363,11 @@ async function saveScript() {
   const name = document.getElementById('scriptNameInput').value.trim();
   if (!name.endsWith('.lua')) { toast('Filename must end with .lua', 'error'); return; }
   const content = document.getElementById('scriptContentInput').value;
+  const label = document.getElementById('scriptLabelInput').value.trim();
   const btn = document.getElementById('saveScriptBtn');
   btn.classList.add('loading');
   try {
-    await api('save_script', { filename: name, content: content });
+    await api('save_script', { filename: name, content: content, label: label });
     closeModal('scriptModal');
     loadScripts();
     toast('Script saved', 'success');
@@ -1468,13 +1477,16 @@ export default {
         if (body.action === "list_scripts") {
           const list = await env.LULILOLO_SCRIPTS.list();
           let scripts = [];
+          let labels = {};
+          const labelsRaw = await env.LULILOLO_KV.get("meta_script_labels", "json");
+          if (labelsRaw && typeof labelsRaw === "object") labels = labelsRaw;
           for (let k of list.keys) {
              if (k.name.endsWith('.lua')) {
                  const content = await env.LULILOLO_SCRIPTS.get(k.name, "text");
                  scripts.push({ name: k.name, size: content ? content.length : 0 });
              }
           }
-          return new Response(JSON.stringify({ scripts }));
+          return new Response(JSON.stringify({ scripts, labels }));
         }
         if (body.action === "get_script") {
           const content = await env.LULILOLO_SCRIPTS.get(body.filename, "text");
@@ -1482,10 +1494,25 @@ export default {
         }
         if (body.action === "save_script") {
           await env.LULILOLO_SCRIPTS.put(body.filename, body.content);
+          if (body.label !== undefined) {
+            let labels = {};
+            const labelsRaw = await env.LULILOLO_KV.get("meta_script_labels", "json");
+            if (labelsRaw && typeof labelsRaw === "object") labels = labelsRaw;
+            if (body.label) labels[body.filename] = String(body.label);
+            else delete labels[body.filename];
+            await env.LULILOLO_KV.put("meta_script_labels", JSON.stringify(labels));
+          }
           return new Response(JSON.stringify({ success: true }));
         }
         if (body.action === "delete_script") {
           await env.LULILOLO_SCRIPTS.delete(body.filename);
+          let labels = {};
+          const labelsRaw = await env.LULILOLO_KV.get("meta_script_labels", "json");
+          if (labelsRaw && typeof labelsRaw === "object") labels = labelsRaw;
+          if (labels[body.filename]) {
+            delete labels[body.filename];
+            await env.LULILOLO_KV.put("meta_script_labels", JSON.stringify(labels));
+          }
           return new Response(JSON.stringify({ success: true }));
         }
 

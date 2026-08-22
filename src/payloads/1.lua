@@ -29,21 +29,25 @@
 
     _G.AimbotConfig = _G.AimbotConfig or {
         Enable = true,
-        Bone = 2,              -- 1 = الرأس, 2 = الصدر, 3 = الخصر
-        Speed = 50,            -- سرعة التصويب (1-100)
-        FOV = 30,              -- مجال الرؤية (درجة)
-        Distance = 250,        -- المسافة القصوى (متر)
-        Smooth = true,         -- تفعيل التمليس (السلاسة)
-        VisCheck = true,       -- التحقق من الرؤية
-        IgnoreKnock = false,   -- تجاهل المصابين
-        IgnoreBot = false,     -- تجاهل البوتات
-        Condition = 1,         -- 1 = عند الإطلاق فقط, 2 = دائماً
+        Bone = 2,              -- 1 = Ø§Ù„Ø±Ø£Ø³, 2 = Ø§Ù„ØµØ¯Ø±, 3 = Ø§Ù„Ø®ØµØ±
+        Speed = 50,            -- Ø³Ø±Ø¹Ø© Ø§Ù„ØªØµÙˆÙŠØ¨ (1-100)
+        FOV = 30,              -- Ù…Ø¬Ø§Ù„ Ø§Ù„Ø±Ø¤ÙŠØ© (Ø¯Ø±Ø¬Ø©)
+        Distance = 250,        -- Ø§Ù„Ù…Ø³Ø§ÙØ© Ø§Ù„Ù‚ØµÙˆÙ‰ (Ù…ØªØ±)
+        Smooth = true,         -- ØªÙØ¹ÙŠÙ„ Ø§Ù„ØªÙ…Ù„ÙŠØ³ (Ø§Ù„Ø³Ù„Ø§Ø³Ø©)
+        VisCheck = true,       -- Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† Ø§Ù„Ø±Ø¤ÙŠØ©
+        IgnoreKnock = false,   -- ØªØ¬Ø§Ù‡Ù„ Ø§Ù„Ù…ØµØ§Ø¨ÙŠÙ†
+        IgnoreBot = false,     -- ØªØ¬Ø§Ù‡Ù„ Ø§Ù„Ø¨ÙˆØªØ§Øª
+        Condition = 1,         -- 1 = Ø¹Ù†Ø¯ Ø§Ù„Ø¥Ø·Ù„Ø§Ù‚ ÙÙ‚Ø·, 2 = Ø¯Ø§Ø¦Ù…Ø§Ù‹
+        RecoilComp = 0,        -- ØªØ¹ÙˆÙŠØ¶ Ø§Ù„Ø§Ø±ØªØ¯Ø§Ø¯ (0-100)
+        BurstAim = false,      -- ÙˆØ¶Ø¹ Ø§Ù„Ø±Ø´Ù‚Ø©: ØªØ¹ÙˆÙŠØ¶ ØªÙ„Ù‚Ø§Ø¦ÙŠ Ø­Ø³Ø¨ Ø§Ù„Ù…Ø³Ø§ÙØ©
+        Prediction = true,     -- velocity lead + bullet drop compensation
+        BulletSpeed = 0,       -- 0 = auto from weapon (m/s)
     }
 
-    -- العظام الأساسية فقط لتقليل الضغط بدلاً من 20 عظمة
+    -- Ø§Ù„Ø¹Ø¸Ø§Ù… Ø§Ù„Ø£Ø³Ø§Ø³ÙŠØ© ÙÙ‚Ø· Ù„ØªÙ‚Ù„ÙŠÙ„ Ø§Ù„Ø¶ØºØ· Ø¨Ø¯Ù„Ø§Ù‹ Ù…Ù† 20 Ø¹Ø¸Ù…Ø©
     local PriorityBones = { "spine_03", "head", "pelvis" }
 
-    -- إعادة استخدام الكائنات لمنع إجهاز الذاكرة (Garbage Collection Stutter)
+    -- Ø¥Ø¹Ø§Ø¯Ø© Ø§Ø³ØªØ®Ø¯Ø§Ù… Ø§Ù„ÙƒØ§Ø¦Ù†Ø§Øª Ù„Ù…Ù†Ø¹ Ø¥Ø¬Ù‡Ø§Ø² Ø§Ù„Ø°Ø§ÙƒØ±Ø© (Garbage Collection Stutter)
     local ReusableStartPos = { X = 0, Y = 0, Z = 0 }
     local ReusableScreenPos = FVector2D and FVector2D() or { X = 0, Y = 0 }
     local ReuseScreenPixel = FVector2D and FVector2D() or { X = 0, Y = 0 }
@@ -109,7 +113,7 @@
         return pos
     end
 
-    -- فحص رؤية خفيف وسريع
+    -- ÙØ­Øµ Ø±Ø¤ÙŠØ© Ø®ÙÙŠÙ ÙˆØ³Ø±ÙŠØ¹
     local function IsBoneVisible(pc, camLoc, target, bonePos, ignoreActors)
         if not Valid(pc) or not Valid(target) or not bonePos or not camLoc then return false end
         if not KismetSystemLibrary or not KismetSystemLibrary.LineTraceSingle then return true end
@@ -261,7 +265,11 @@
         local igKnock = _G.AimbotConfig.IgnoreKnock or false
         local igBot = _G.AimbotConfig.IgnoreBot or false
 
-        -- مرحلة 1: تصفية الهدف الأقرب للشاشة أولاً (بدون إهدار المعالج في LineTrace)
+        local aimBoneName = PriorityBones[_G.AimbotConfig.Bone or 2] or "spine_03"
+
+        _G._AIM_LOCKED_CHAR = nil
+
+        -- Ù…Ø±Ø­Ù„Ø© 1: ØªØµÙÙŠØ© Ø§Ù„Ù‡Ø¯Ù Ø§Ù„Ø£Ù‚Ø±Ø¨ Ù„Ù„Ø´Ø§Ø´Ø© Ø£ÙˆÙ„Ø§Ù‹ (Ø¨Ø¯ÙˆÙ† Ø¥Ù‡Ø¯Ø§Ø± Ø§Ù„Ù…Ø¹Ø§Ù„Ø¬ ÙÙŠ LineTrace)
         for _, target in ipairs(enemies) do
             if Valid(target) then
                 if igKnock and target.HealthStatus == 1 then goto continue end
@@ -273,8 +281,8 @@
                     if tIsBot then goto continue end
                 end
 
-                -- فحص الموقع الافتراضي (الصدر)
-                local targetBonePos = GetBoneLocationSafety(target, "spine_03")
+                -- ÙØ­Øµ Ø§Ù„Ù…ÙˆÙ‚Ø¹ Ø§Ù„Ø§ÙØªØ±Ø§Ø¶ÙŠ (Ø§Ù„Ø¹Ø¸Ù… Ø§Ù„Ù…Ø®ØªØ§Ø±)
+                local targetBonePos = GetBoneLocationSafety(target, aimBoneName)
                 if targetBonePos and (targetBonePos.X ~= 0 or targetBonePos.Y ~= 0 or targetBonePos.Z ~= 0) then
                     local success = pc:ProjectWorldLocationToScreen(targetBonePos, ReusableScreenPos, false)
                     if success and ReusableScreenPos.X > 0 and ReusableScreenPos.Y > 0 then
@@ -282,14 +290,20 @@
                         local dy = ReusableScreenPos.Y - centerY
                         local distScreen = math.sqrt(dx * dx + dy * dy)
 
-                        if distScreen <= FOV_RADIUS and distScreen < bestScore then
-                            -- مرحلة 2: فحص الرؤية فقط للمرشح الأفضل
+                        -- hysteresis: naya target kam az kam 12% qareeb ho tabhi switch (flip-flop anti-jitter)
+                        local switchBias = (bestTarget ~= nil) and (bestScore * 0.88) or bestScore
+                        if distScreen <= FOV_RADIUS and distScreen < switchBias then
+                            -- Ù…Ø±Ø­Ù„Ø© 2: ÙØ­Øµ Ø§Ù„Ø±Ø¤ÙŠØ© ÙÙ‚Ø· Ù„Ù„Ù…Ø±Ø´Ø­ Ø§Ù„Ø£ÙØ¶Ù„
                             local isVisible = true
                             local validBonePos = targetBonePos
                             
                             if useVisCheck then
                                 isVisible = false
-                                for _, boneName in ipairs(PriorityBones) do
+                                local orderedBones = { aimBoneName }
+                                for _, bn in ipairs(PriorityBones) do
+                                    if bn ~= aimBoneName then orderedBones[#orderedBones + 1] = bn end
+                                end
+                                for _, boneName in ipairs(orderedBones) do
                                     local bPos = GetBoneLocationSafety(target, boneName)
                                     if bPos and IsBoneVisible(pc, camLoc, target, bPos) then
                                         isVisible = true
@@ -312,8 +326,111 @@
         end
         
         if not Valid(bestTarget) or not bestTargetBonePos then return end
-        
-        -- حساب التوجيه والسلاسة
+
+        _G._AIM_LOCKED_CHAR = bestTarget
+
+        -- AIM PREDICTION: velocity lead + gravity drop (SDK-accurate)
+        local bPredictOn = (_G.AimbotConfig.Prediction ~= false)
+        local aimPosX, aimPosY, aimPosZ = bestTargetBonePos.X, bestTargetBonePos.Y, bestTargetBonePos.Z
+        local dropPitchDeg = 0.0
+        if bPredictOn then
+            pcall(function()
+                local target = bestTarget
+                -- 1) bullet speed (cm/s): config override ya weapon se auto
+                local bulletSpeed = tonumber(_G.AimbotConfig.BulletSpeed) or 0
+                local gravScale = 1.0
+                local noGravRange = 0.0
+                local weapon = nil
+                pcall(function()
+                    if type(player.GetCurrentShootWeapon) == "function" then weapon = player:GetCurrentShootWeapon() end
+                end)
+                if Valid(weapon) then
+                    if bulletSpeed < 100 then
+                        pcall(function()
+                            if type(weapon.GetBulletFireSpeedFromEntity) == "function" then
+                                local s = weapon:GetBulletFireSpeedFromEntity()
+                                if s and s > 1000 then bulletSpeed = s end
+                            end
+                        end)
+                    end
+                    pcall(function()
+                        local ent = weapon.ShootWeaponEntity or weapon.ShootWeaponEntity_GEN_VARIABLE
+                        if Valid(ent) then
+                            if ent.LaunchGravityScale then gravScale = tonumber(ent.LaunchGravityScale) or 1.0 end
+                            if ent.MaxNoGravityRange then noGravRange = tonumber(ent.MaxNoGravityRange) or 0.0 end
+                        end
+                    end)
+                end
+                if bulletSpeed < 10000 then bulletSpeed = 80000 end -- fallback ~800 m/s
+
+                -- 2) target velocity (cm/s): movement comp -> GetVelocity -> vehicle
+                local velX, velY, velZ = 0.0, 0.0, 0.0
+                local mv = nil
+                pcall(function() mv = target.STCharacterMovement or target.CharacterMovement end)
+                local gotVel = false
+                if Valid(mv) then
+                    pcall(function()
+                        if mv.Velocity then
+                            velX = mv.Velocity.X or 0; velY = mv.Velocity.Y or 0; velZ = mv.Velocity.Z or 0
+                            gotVel = true
+                        end
+                    end)
+                end
+                if not gotVel then
+                    pcall(function()
+                        if type(target.GetVelocity) == "function" then
+                            local v = target:GetVelocity()
+                            if v then velX = v.X or 0; velY = v.Y or 0; velZ = v.Z or 0; gotVel = true end
+                        end
+                    end)
+                end
+                if not gotVel or (math.abs(velX) + math.abs(velY)) < 1.0 then
+                    -- vehicle case: character attached ho to vehicle velocity lo
+                    pcall(function()
+                        local veh = target.Vehicle or target.CurrentVehicle
+                        if Valid(veh) then
+                            local vv = nil
+                            pcall(function() vv = veh.VehicleMovement and veh.VehicleMovement.Velocity end)
+                            if not vv then pcall(function() vv = veh.GetVelocity and veh:GetVelocity() end) end
+                            if vv then velX = vv.X or 0; velY = vv.Y or 0; velZ = vv.Z or 0 end
+                        end
+                    end)
+                end
+
+                -- 3) iterative lead: t = dist/bulletSpeed -> predict -> refine
+                local cxp, cyp, czp = camLoc.X, camLoc.Y, camLoc.Z
+                local px, py, pz = aimPosX, aimPosY, aimPosZ
+                local flyT = 0.0
+                for _ = 1, 2 do
+                    local ddx, ddy, ddz = px - cxp, py - cyp, pz - czp
+                    local distCm = math.sqrt(ddx * ddx + ddy * ddy + ddz * ddz)
+                    flyT = distCm / bulletSpeed
+                    px = aimPosX + velX * flyT
+                    py = aimPosY + velY * flyT
+                    pz = aimPosZ + velZ * flyT
+                end
+
+                -- 4) gravity drop: g = 980 * LaunchGravityScale, MaxNoGravityRange ke andar zero
+                local g = 980.0 * gravScale
+                if g > 0 and flyT > 0 then
+                    local hdx, hdy = px - cxp, py - cyp
+                    local horizCm = math.sqrt(hdx * hdx + hdy * hdy)
+                    if horizCm > noGravRange then
+                        local dropCm = 0.5 * g * flyT * flyT
+                        dropPitchDeg = math.deg(math.atan(dropCm / math.max(horizCm, 1.0)))
+                        pz = pz + dropCm
+                    end
+                end
+
+                local NV = GetFVector(px, py, pz)
+                if NV then
+                    bestTargetBonePos = NV
+                    aimPosX, aimPosY, aimPosZ = px, py, pz
+                end
+            end)
+        end
+
+        -- Ø­Ø³Ø§Ø¨ Ø§Ù„ØªÙˆØ¬ÙŠÙ‡ ÙˆØ§Ù„Ø³Ù„Ø§Ø³Ø©
         local targetRot = KismetMathLibrary.FindLookAtRotation(camLoc, bestTargetBonePos)
         if not targetRot then return end
         
@@ -328,25 +445,56 @@
         if deltaPitch > 180 then deltaPitch = deltaPitch - 360 end
         if deltaPitch < -180 then deltaPitch = deltaPitch + 360 end
         
-        -- تعويض السكوب عند فتح الزوم
+        -- ØªØ¹ÙˆÙŠØ¶ Ø§Ù„Ø³ÙƒÙˆØ¨ Ø¹Ù†Ø¯ ÙØªØ­ Ø§Ù„Ø²ÙˆÙ… (lerp-smoothed, no hard jumps)
         local currentFOV = camManager.GetFOVAngle and camManager:GetFOVAngle() or 90.0
-        if currentFOV < 65.0 then
+        local wantCorr = 0.0
+        if not bPredictOn and currentFOV < 65.0 then
+            -- legacy zoom hack: sirf jab Prediction OFF ho (physics drop real comp karta hai)
             local zoomRatio = (65.0 - currentFOV) / 65.0
             local distMeters = player:GetDistanceTo(bestTarget) / 100.0
-            if distMeters > 30 then
-                local pitchCorrection = math.min((distMeters - 30) * 0.018 * zoomRatio, 3.5)
-                deltaPitch = deltaPitch - pitchCorrection
+            if distMeters > 50 then
+                wantCorr = math.min((distMeters - 50) * 0.015 * zoomRatio, 1.0)
             end
+        end
+        _G._AIM_ZoomCorr = (_G._AIM_ZoomCorr or 0) + (wantCorr - (_G._AIM_ZoomCorr or 0)) * 0.18
+        if _G._AIM_ZoomCorr < 0.005 then _G._AIM_ZoomCorr = 0 end
+        deltaPitch = deltaPitch - _G._AIM_ZoomCorr
+
+        -- physics drop compensation: bullet girne ka angle upar add
+        if dropPitchDeg > 0 then
+            deltaPitch = deltaPitch + dropPitchDeg
         end
 
         local speedVal = _G.AimbotConfig.Speed or 50
-        local finalPitch = currentRot.Pitch + deltaPitch
-        local finalYaw = currentRot.Yaw + deltaYaw
+        local finalPitch, finalYaw
 
-        if _G.AimbotConfig.Smooth ~= false then
+        if math.abs(deltaPitch) < 0.05 and math.abs(deltaYaw) < 0.05 then
+            -- deadzone: bone pe exact snap, micro-oscillation khatam
+            finalPitch = currentRot.Pitch + deltaPitch
+            finalYaw = currentRot.Yaw + deltaYaw
+        elseif _G.AimbotConfig.Smooth ~= false then
             local smoothFactor = math.max(0.01, math.min(speedVal / 100.0, 1.0))
             finalPitch = currentRot.Pitch + (deltaPitch * smoothFactor)
             finalYaw = currentRot.Yaw + (deltaYaw * smoothFactor)
+        else
+            finalPitch = currentRot.Pitch + deltaPitch
+            finalYaw = currentRot.Yaw + deltaYaw
+        end
+
+        local recoilVal = _G.AimbotConfig.RecoilComp or 0
+        if _G.AimbotConfig.BurstAim then
+            local burstDist = player:GetDistanceTo(bestTarget) / 100.0
+            recoilVal = math.max(0.3, math.min(1, 1.2 - burstDist * 0.001))
+        end
+        local wantPull = 0.0
+        if recoilVal > 0 and IsPlayerFiring(player) then
+            wantPull = math.min((recoilVal / 100.0) * 2.2, 1.2)
+        end
+        -- pull bhi ramp in/out hota hai, firing start/stop pe pop nahi
+        _G._AIM_Pull = (_G._AIM_Pull or 0) + (wantPull - (_G._AIM_Pull or 0)) * 0.25
+        if _G._AIM_Pull < 0.01 then _G._AIM_Pull = 0 end
+        if _G._AIM_Pull > 0 then
+            finalPitch = finalPitch - _G._AIM_Pull
         end
         
         pc:SetControlRotation({ Pitch = finalPitch, Yaw = finalYaw, Roll = 0 }, "SrchubAimbot")
@@ -362,21 +510,21 @@
         WidgetSlot = nil,
         TextBlock = nil,
         
-        -- إعدادات المستطيل الأصلية
-        Width = 300,            -- العرض الإجمالي الأصلي
-        Height = 28,           -- الارتفاع الأصلي
-        OffsetY = 10,          -- المسافة
+        -- Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª Ø§Ù„Ù…Ø³ØªØ·ÙŠÙ„ Ø§Ù„Ø£ØµÙ„ÙŠØ©
+        Width = 300,            -- Ø§Ù„Ø¹Ø±Ø¶ Ø§Ù„Ø¥Ø¬Ù…Ø§Ù„ÙŠ Ø§Ù„Ø£ØµÙ„ÙŠ
+        Height = 28,           -- Ø§Ù„Ø§Ø±ØªÙØ§Ø¹ Ø§Ù„Ø£ØµÙ„ÙŠ
+        OffsetY = 10,          -- Ø§Ù„Ù…Ø³Ø§ÙØ©
         
-        -- أعداد اللاعبين والبوتات
+        -- Ø£Ø¹Ø¯Ø§Ø¯ Ø§Ù„Ù„Ø§Ø¹Ø¨ÙŠÙ† ÙˆØ§Ù„Ø¨ÙˆØªØ§Øª
         PlayerCount = 0,
         
         BotCount = 0,
         
-        -- إعدادات الخط والحجم الأصلية
-        FontSize = 16,          -- حجم الخط الأساسي
-        TextScaleValue = 1.1,   -- معامل تحجيم النص
+        -- Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª Ø§Ù„Ø®Ø· ÙˆØ§Ù„Ø­Ø¬Ù… Ø§Ù„Ø£ØµÙ„ÙŠØ©
+        FontSize = 16,          -- Ø­Ø¬Ù… Ø§Ù„Ø®Ø· Ø§Ù„Ø£Ø³Ø§Ø³ÙŠ
+        TextScaleValue = 1.1,   -- Ù…Ø¹Ø§Ù…Ù„ ØªØ­Ø¬ÙŠÙ… Ø§Ù„Ù†Øµ
         
-        -- إعدادات التدرج واللون الأصلية
+        -- Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª Ø§Ù„ØªØ¯Ø±Ø¬ ÙˆØ§Ù„Ù„ÙˆÙ† Ø§Ù„Ø£ØµÙ„ÙŠØ©
         NumLayers = 50,
         Red = 1.0,
         Green = 0.0,
@@ -414,7 +562,7 @@
         local numLayers = RedBoxOverlay.NumLayers
         local totalWidth = RedBoxOverlay.Width
 
-        -- 1. خلفية المستطيل المتدرجة (50 طبقة بنفس التصميم الأصلي)
+        -- 1. Ø®Ù„ÙÙŠØ© Ø§Ù„Ù…Ø³ØªØ·ÙŠÙ„ Ø§Ù„Ù…ØªØ¯Ø±Ø¬Ø© (50 Ø·Ø¨Ù‚Ø© Ø¨Ù†ÙØ³ Ø§Ù„ØªØµÙ…ÙŠÙ… Ø§Ù„Ø£ØµÙ„ÙŠ)
         for i = 1, numLayers do
             local progress = (i / numLayers) ^ 1.15
             local layerWidth = progress * totalWidth
@@ -439,7 +587,7 @@
             end
         end
 
-        -- 2. إنشاء كائن النص
+        -- 2. Ø¥Ù†Ø´Ø§Ø¡ ÙƒØ§Ø¦Ù† Ø§Ù„Ù†Øµ
         local txtWidget = nil
         pcall(function()
             txtWidget = CGame:NewObjectFromPath("/Script/UMG.TextBlock", Container)
@@ -3199,7 +3347,7 @@
         return vis
     end
 
-    function PlayerMapMarker.UpdateSnapLine(KeyStr, CanvasPos, bOnScreen, fromX, fromY, bVisible)
+    function PlayerMapMarker.UpdateSnapLine(KeyStr, CanvasPos, bOnScreen, fromX, fromY, bVisible, bLocked)
         if not PlayerMapMarker.bUseSnapLines then return end
         if not PlayerMapMarker.ESPCanvas or not Game:IsValid(PlayerMapMarker.ESPCanvas) then return end
 
@@ -3223,6 +3371,21 @@
         local Widget = LineData.Widget
         local Slot = LineData.Slot
 
+        -- LOCK INDICATOR: aimbot ka locked target = red line (state change pe hi set)
+        local bLockedNow = (bLocked == true) and _G.AimbotConfig and _G.AimbotConfig.Enable
+        if LineData._LockedState ~= bLockedNow then
+            LineData._LockedState = bLockedNow
+            if bLockedNow then
+                pcall(function() Widget:SetBrushColor(FLinearColor(1.0, 0.12, 0.12, 0.95)) end)
+                pcall(function() Slot:SetZOrder(6) end)
+            else
+                pcall(function()
+                    Widget:SetBrushColor(PlayerMapMarker.SnapLineColor or FLinearColor(1.0, 1.0, 1.0, PlayerMapMarker.SnapLineOpacity or 0.7))
+                end)
+                pcall(function() Slot:SetZOrder(1) end)
+            end
+        end
+
         pcall(function() Widget:SetWidgetVisibility(UEnums.ESlateVisibility.SelfHitTestInvisible) end)
         
         if not LineData._PivotSet then
@@ -3238,6 +3401,7 @@
         local dy = toY - fromY
         local length = math.sqrt(dx * dx + dy * dy)
         local thickness = PlayerMapMarker.SnapLineThickness or 1.5
+        if LineData._LockedState then thickness = thickness + 1.2 end
 
         local angle_rad = 0
         if math.atan2 then
@@ -3293,7 +3457,7 @@
     end
 
     function PlayerMapMarker.ClearAllESP()
-        -- تنظيف كائنات المستطيل لمنع التراكم بين الأجوام
+        -- ØªÙ†Ø¸ÙŠÙ ÙƒØ§Ø¦Ù†Ø§Øª Ø§Ù„Ù…Ø³ØªØ·ÙŠÙ„ Ù„Ù…Ù†Ø¹ Ø§Ù„ØªØ±Ø§ÙƒÙ… Ø¨ÙŠÙ† Ø§Ù„Ø£Ø¬ÙˆØ§Ù…
         RedBoxOverlay.Stop()
 
         for KeyStr, Data in pairs(PlayerMapMarker.ESPWidgets) do
@@ -3427,7 +3591,7 @@
                                 
                                 if PlayerMapMarker.bUseSnapLines then
                                     PlayerMapMarker.UpdateSnapLine(KeyStr, CanvasPos, bOnScreen, fromX, fromY,
-                                        PlayerMapMarker.IsCharacterVisibleCached(KeyStr, Character))
+                                            PlayerMapMarker.IsCharacterVisibleCached(KeyStr, Character), Character == _G._AIM_LOCKED_CHAR)
                                 else
                                     PlayerMapMarker.RemoveSnapLine(KeyStr)
                                 end
@@ -3462,7 +3626,7 @@
                             
                             if PlayerMapMarker.bUseSnapLines then
                                 PlayerMapMarker.UpdateSnapLine(KeyStr, CanvasPos, bOnScreen, fromX, fromY,
-                                    PlayerMapMarker.IsCharacterVisibleCached(KeyStr, Character))
+                                        PlayerMapMarker.IsCharacterVisibleCached(KeyStr, Character), Character == _G._AIM_LOCKED_CHAR)
                             else
                                 PlayerMapMarker.RemoveSnapLine(KeyStr)
                             end
@@ -3490,7 +3654,7 @@
     function PlayerMapMarker.UpdateESPLight()
         pcall(ProcessAimbotFrame)
 
-        -- تحديث موقع المستطيل في كل فريم ليبقى مطبقاً فوق SnapLine تماماً بدون lag
+        -- ØªØ­Ø¯ÙŠØ« Ù…ÙˆÙ‚Ø¹ Ø§Ù„Ù…Ø³ØªØ·ÙŠÙ„ ÙÙŠ ÙƒÙ„ ÙØ±ÙŠÙ… Ù„ÙŠØ¨Ù‚Ù‰ Ù…Ø·Ø¨Ù‚Ø§Ù‹ ÙÙˆÙ‚ SnapLine ØªÙ…Ø§Ù…Ø§Ù‹ Ø¨Ø¯ÙˆÙ† lag
         if RedBoxOverlay.bActive then
             RedBoxOverlay.UpdatePosition()
         end
@@ -3531,7 +3695,7 @@
                         PlayerMapMarker.UpdateESPPositionWithPC(Widget, Loc, PC, CanvasPos)
                         if PlayerMapMarker.bUseSnapLines then
                             PlayerMapMarker.UpdateSnapLine(KeyStr, CanvasPos, bOnScreen, fromX, fromY,
-                                PlayerMapMarker.IsCharacterVisibleCached(KeyStr, Character))
+                                    PlayerMapMarker.IsCharacterVisibleCached(KeyStr, Character), Character == _G._AIM_LOCKED_CHAR)
                         else
                             PlayerMapMarker.RemoveSnapLine(KeyStr)
                         end
@@ -3944,7 +4108,7 @@
         end)
         local MyTeamID = PlayerMapMarker.GetTeamID(MyChar)
 
-        -- 1. حساب أعداد اللاعبين والبوتات الأحياء (بدون اللاعب نفسه والتيم)
+        -- 1. Ø­Ø³Ø§Ø¨ Ø£Ø¹Ø¯Ø§Ø¯ Ø§Ù„Ù„Ø§Ø¹Ø¨ÙŠÙ† ÙˆØ§Ù„Ø¨ÙˆØªØ§Øª Ø§Ù„Ø£Ø­ÙŠØ§Ø¡ (Ø¨Ø¯ÙˆÙ† Ø§Ù„Ù„Ø§Ø¹Ø¨ Ù†ÙØ³Ù‡ ÙˆØ§Ù„ØªÙŠÙ…)
         local realPlayers = 0
         local botPlayers = 0
 
@@ -3974,14 +4138,14 @@
             end
         end
 
-        -- 2. إرسال الأعداد للمستطيل وضمان تشغيله
+        -- 2. Ø¥Ø±Ø³Ø§Ù„ Ø§Ù„Ø£Ø¹Ø¯Ø§Ø¯ Ù„Ù„Ù…Ø³ØªØ·ÙŠÙ„ ÙˆØ¶Ù…Ø§Ù† ØªØ´ØºÙŠÙ„Ù‡
         if RedBoxOverlay.bActive then
             RedBoxOverlay.SetCounts(realPlayers, botPlayers)
         elseif PlayerMapMarker.bUseRedBox ~= false then
             RedBoxOverlay.Start()
         end
 
-        -- 3. استكمال باقي عملية المسح والـ ESP
+        -- 3. Ø§Ø³ØªÙƒÙ…Ø§Ù„ Ø¨Ø§Ù‚ÙŠ Ø¹Ù…Ù„ÙŠØ© Ø§Ù„Ù…Ø³Ø­ ÙˆØ§Ù„Ù€ ESP
         if PlayerMapMarker.bUseScreenMark then
             PlayerMapMarker.SetupScreenMarkConfig()
         end
@@ -4248,6 +4412,7 @@
         BTN_AIMBOT_SPEED   = 9990033,
         BTN_AIMBOT_KNOCK   = 9990034,
         BTN_AIMBOT_BOT     = 9990035,
+        BTN_AIMBOT_RECOIL  = 9990036,
         
         BTN_MEM_GRASS      = 9990080,
         BTN_MEM_TREES      = 9990081,
@@ -4277,6 +4442,7 @@
         [LOC.BTN_AIMBOT_SPEED]  = "Aimbot Smooth Speed",
         [LOC.BTN_AIMBOT_KNOCK]  = "Ignore Knocked",
         [LOC.BTN_AIMBOT_BOT]    = "Ignore Bots",
+        [LOC.BTN_AIMBOT_RECOIL] = "Recoil Comp",
         
         [LOC.BTN_MEM_GRASS]     = "Remove Grass",
         [LOC.BTN_MEM_TREES]     = "Remove Trees",
@@ -4583,6 +4749,10 @@ RefreshAllMemoryFeatures()
         MakeSwitcher("aim_bot", LOC.BTN_AIMBOT_BOT,
             function() return (_G.AimbotConfig and _G.AimbotConfig.IgnoreBot) and 1 or 2 end,
             function(idx) if _G.AimbotConfig then _G.AimbotConfig.IgnoreBot = (idx == 1) end end
+        ),
+        MakeSlider("aim_recoil", LOC.BTN_AIMBOT_RECOIL, 0, 100,
+            function() return _G.AimbotConfig and _G.AimbotConfig.RecoilComp or 0 end,
+            function(val) if _G.AimbotConfig then _G.AimbotConfig.RecoilComp = val end end
         ),
         }
 

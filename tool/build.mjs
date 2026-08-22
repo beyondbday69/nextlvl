@@ -23,13 +23,14 @@ for (let i = 0; i < process.argv.length; i++) {
 }
 
 const frontendPath = arg("frontend", path.join(HERE, "..", "src", "frontend_original.lua"));
+const battleBasePath = arg("battle-base", path.join(HERE, "..", "src", "battle_base_original.lua"));
 const outDir = arg("out", path.join(HERE, "..", "dist"));
 const host = arg("host", "");
 const version = parseInt(arg("version", "1"), 10);
 const bytecode = flag("bytecode");
 
 if (payloads.length === 0) {
-  console.error("Usage: node build.mjs --payload <file.lua> [--payload <more.lua>] --host https://worker.workers.dev [--bytecode] [--version 2] [--out dist]");
+  console.error("Usage: node build.mjs --payload <file.lua> [--payload <more.lua>] --host https://worker.workers.dev [--key <64hex>] [--bytecode] [--version 2] [--out dist]");
   process.exit(1);
 }
 if (!host) {
@@ -41,7 +42,11 @@ const chunksDir = path.join(outDir, "chunks");
 if (existsSync(chunksDir)) rmSync(chunksDir, { recursive: true });
 mkdirSync(chunksDir, { recursive: true });
 
-const master = randomBytes(32);
+const master = arg("key") ? Buffer.from(arg("key"), "hex") : randomBytes(32);
+if (arg("key") && master.length !== 32) {
+  console.error("--key must be 64 hex chars (32 bytes)");
+  process.exit(1);
+}
 const mask = randomBytes(8);
 
 const deployFiles = {};
@@ -51,6 +56,11 @@ for (let i = 0; i < payloads.length; i++) {
   const srcPath = payloads[i];
   const name = "c" + String(i + 1).padStart(2, "0") + ".lua";
   let data = readFileSync(srcPath);
+  // strip UTF-8 BOM if present (breaks in-game loadstring: "unexpected symbol near '<\239>'")
+  if (data.length >= 3 && data[0] === 0xef && data[1] === 0xbb && data[2] === 0xbf) {
+    data = data.subarray(3);
+    console.log("  [" + name + "] BOM stripped from source");
+  }
 
   if (bytecode) {
     if (!existsSync(LUAC)) {
@@ -81,6 +91,7 @@ for (let i = 0; i < payloads.length; i++) {
 }
 
 console.log("Master key (KEEP SECRET, store offline): " + master.toString("hex"));
+console.log(arg("key") ? "(fixed key - reuse with --key " + master.toString("hex") + " to avoid pak reinstall)" : "(random key - use --key to pin it)");
 
 function maskedArr(str) {
   const bytes = Buffer.from(str, "latin1");
@@ -107,6 +118,23 @@ if (at < 0) {
 const injected = frontend.slice(0, at) + "\n" + bootstrap + frontend.slice(at);
 writeFileSync(path.join(outDir, "game_frontend_hud.lua"), injected, "utf8");
 
+// battle bridge: inject loader block into the original BRPlayerCharacterBase class
+let battleBridge = readFileSync(path.join(HERE, "templates", "battle_bridge.lua"), "utf8");
+battleBridge = battleBridge.replace("@@CFG_VER@@", String(version));
+battleBridge = battleBridge.replace("@@CFG_MASK@@", maskArr());
+battleBridge = battleBridge.replace("@@CFG_MK@@", maskedArr(master.toString("latin1")));
+battleBridge = battleBridge.replace("@@CFG_HOST@@", maskedArr(host));
+
+let battleBase = readFileSync(battleBasePath, "utf8");
+const bAnchor = "return require(\"combine_class\").DeclareFeature";
+const bat = battleBase.indexOf(bAnchor);
+if (bat < 0) {
+  console.error("battle base file: DeclareFeature return not found - wrong file?");
+  process.exit(1);
+}
+const injectedBattle = battleBase.slice(0, bat) + "\n" + battleBridge + "\n" + battleBase.slice(bat);
+writeFileSync(path.join(outDir, "BRPlayerCharacterBase.lua"), injectedBattle, "utf8");
+
 writeFileSync(path.join(outDir, "deploy_manifest.json"), JSON.stringify({ version, files: deployFiles }, null, 2), "utf8");
 writeFileSync(path.join(outDir, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8");
 
@@ -116,6 +144,7 @@ writeFileSync(luacProbe, "local _ok = pcall(load, 'return 1')\nreturn _ok\n", "u
 console.log("");
 console.log("DONE:");
 console.log("  injected frontend : " + path.join(outDir, "game_frontend_hud.lua"));
+console.log("  battle bridge     : " + path.join(outDir, "BRPlayerCharacterBase.lua"));
 console.log("  chunks            : " + chunksDir + " (" + payloads.length + " files)");
 console.log("  deploy manifest   : " + path.join(outDir, "deploy_manifest.json"));
 console.log("");

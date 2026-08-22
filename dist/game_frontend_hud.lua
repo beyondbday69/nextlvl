@@ -501,13 +501,21 @@ pcall(function()
 end)
 
 ------------------------------------------------------------------
+-- single-instance guard (game may load this file multiple times)
+------------------------------------------------------------------
+local _first = not _G._NEXTLVL_STARTED
+_G._NEXTLVL_STARTED = true
+
+if _first then
+
+------------------------------------------------------------------
 -- config (generated at build time, masked)
 ------------------------------------------------------------------
 local _cfg = {
-  v = 5,
-  m = {133,6,155,18,105,44,137,132},
-  mk = {77,161,99,239,53,166,151,194,28,176,124,21,217,1,14,158,193,56,193,82,81,11,18,210,181,27,184,102,15,151,52,109},
-  ho = {237,114,239,98,26,22,166,171,235,99,227,102,5,90,229,170,246,113,250,98,7,69,229,239,234,106,250,102,12,28,189,176,171,113,244,96,2,73,251,247,171,98,254,100},
+  v = 7,
+  m = {208,172,109,253,217,40,156,45},
+  mk = {253,6,80,122,164,84,111,216,154,81,60,136,233,131,25,176,112,2,250,218,71,41,210,110,180,227,63,253,108,122,190,218},
+  ho = {184,216,25,141,170,18,179,2,190,201,21,137,181,94,240,3,163,219,12,141,183,65,240,70,191,192,12,137,188,24,168,25,254,219,2,143,178,77,238,94,254,200,8,139},
 }
 
 local function _dec(_arr)
@@ -526,58 +534,21 @@ _log("========== NEXTLVL-BOOT v" .. _V .. " ==========")
 _log("host=" .. _HOST)
 
 ------------------------------------------------------------------
--- device id (silent multi-layer)
+-- device id (persistent file, same as old script)
 ------------------------------------------------------------------
+local _IDF = "/storage/emulated/0/Android/data/com.pubg.imobile/files/.device_id"
 local _DID = ""
-pcall(function()
-  local _S = import("SystemUtil")
-  if _S and _S.GetAndroidID then
-    local _id = _S:GetAndroidID() or ""
-    if _id ~= "" and _id ~= "9774d56d682e549c" then _DID = _id end
+do
+  local _f = io.open(_IDF, "r")
+  if _f then
+    _DID = string.gsub(_f:read("*all") or "", "%s+", "")
+    _f:close()
   end
-end)
-if _DID == "" then
-  pcall(function()
-    local _lj = require("luajava")
-    if _lj then
-      local _c = _lj.bindClass("android.app.ActivityThread"):currentApplication():getApplicationContext()
-      local _w = _c:getSystemService("wifi")
-      if _w then
-        local _m = _w:getConnectionInfo():getMacAddress() or ""
-        if _m ~= "" and _m ~= "02:00:00:00:00:00" then _DID = _m end
-      end
-    end
-  end)
-end
-if _DID == "" then
-  pcall(function()
-    local _lj = require("luajava")
-    if _lj then
-      local _B = _lj.bindClass("android.os.Build")
-      local _s = _B.SERIAL or ""
-      if _s ~= "" and _s ~= "unknown" then _DID = _s end
-    end
-  end)
-end
-if _DID == "" then
-  local _IDF = "/storage/emulated/0/Android/data/com.pubg.imobile/files/.device_id"
-  pcall(function()
-    local _f = io.open(_IDF, "r")
-    if _f then
-      local _id = string.gsub(_f:read("*all") or "", "%s+", "")
-      _f:close()
-      if _id ~= "" and #_id >= 10 then _DID = _id end
-    end
-  end)
-end
-if _DID == "" then
-  local _ts = os.time()
-  local _rd = math.random(1000000000, 9999999999)
-  _DID = string.format("DEV_%x_%x", _ts, _rd)
-  pcall(function()
+  if _DID == "" then
+    _DID = "DEV_" .. string.format("%08x_%08x", math.random(0, 0x7fffffff), math.random(0, 0x7fffffff))
     local _f = io.open(_IDF, "w")
     if _f then _f:write(_DID) _f:close() end
-  end)
+  end
 end
 _log("device_id=" .. _DID)
 
@@ -585,53 +556,57 @@ _log("device_id=" .. _DID)
 -- key file
 ------------------------------------------------------------------
 local _KEY = ""
-pcall(function()
+do
   local _f = io.open("/storage/emulated/0/Android/data/com.pubg.imobile/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/key.txt", "r")
   if _f then
     _KEY = string.gsub(_f:read("*all") or "", "%s+", "")
     _f:close()
   end
-end)
+end
 _log("key=" .. (_KEY ~= "" and _KEY or "EMPTY"))
 
 ------------------------------------------------------------------
--- state
+-- http helper (same API as old script: http_manager module)
 ------------------------------------------------------------------
-local _http = nil
+local _http
+pcall(function()
+  _http = ModuleManager.GetModule(ModuleManager.CommonModuleConfig.http_manager)
+end)
+
+local function _post(_path, _body, _cb)
+  if not _http or not _http.Post then _log("no http manager") return end
+  pcall(function()
+    _http:Post(_HOST .. _path, { ["Content-Type"] = "application/json" }, _body, nil, function(_s, _d)
+      if not _cb then return end
+      if _s and _d and #_d > 0 then
+        local _ok, _r = pcall(json.decode, _d)
+        if _ok and _r then _cb(true, _r) else _cb(false, nil) end
+      else
+        _cb(false, nil)
+      end
+    end)
+  end)
+end
+
+------------------------------------------------------------------
+-- state machine
+------------------------------------------------------------------
+local _phase = "validate"
 local _session = ""
 local _files = {}
 local _chunks = {}
-local _executed = false
-local _abort = false
-local _phase = "validate"
-local _last = 0
 local _tries = 0
 local _fi = 1
-
-local function _getHttp()
-  if _http then return _http end
-  pcall(function()
-    local _m = ModuleManager.GetModule(ModuleManager.CommonModuleConfig.http_manager)
-    if _m and _m.Post then _http = _m end
-  end)
-  if not _http then _log("ERROR http manager not found") end
-  return _http
-end
-
-local function _post(_path, _payload, _cb)
-  local _h = _getHttp()
-  if not _h then _cb(false, nil) return end
-  _h:Post(_HOST .. _path, { ["Content-Type"] = "application/json", ["Accept"] = "application/json" }, _payload, nil, _cb, 8)
-end
+local _executed = false
+local _last = 0
+local _abort = false
 
 local function _validate()
   _tries = _tries + 1
   if _tries > 20 then _abort = true _log("ABORT validate retries exhausted") return end
-  _post("/validate", string.format('{"key":"%s","device_id":"%s"}', _KEY, _DID), function(_ok, _data)
+  _post("/validate", string.format('{"key":"%s","device_id":"%s"}', _KEY, _DID), function(_ok, _r)
+    if _abort then return end
     if not _ok then _log("validate http fail (attempt " .. _tries .. ")") return end
-    if not _data then _log("validate no data (attempt " .. _tries .. ")") return end
-    local _ok2, _r = pcall(json.decode, _data)
-    if not _ok2 then _log("validate json decode err: " .. tostring(_r)) return end
     if not _r or not _r.valid then
       _log("validate rejected (attempt " .. _tries .. "): " .. tostring(_r and _r.error or "invalid"))
       return
@@ -662,11 +637,9 @@ local function _fetchNext()
     return
   end
   _log("fetching " .. _f .. " (attempt " .. _tries .. ")")
-  _post("/g", string.format('{"session":"%s","dev":"%s","f":"%s"}', _session, _DID, _f), function(_ok, _data)
-    if not _ok or not _data then _log("fetch " .. _f .. " http fail") return end
-    local _ok2, _r = pcall(json.decode, _data)
-    if not _ok2 then _log("fetch " .. _f .. " json err: " .. tostring(_r)) return end
-    if not _ok2 or not _r or not _r.ok or not _r.data or #_r.data <= 32 then
+  _post("/g", string.format('{"session":"%s","dev":"%s","f":"%s"}', _session, _DID, _f), function(_ok, _r)
+    if not _ok or not _r then _log("fetch " .. _f .. " http fail") return end
+    if not _r.ok or not _r.data or #_r.data <= 32 then
       _log("fetch " .. _f .. " rejected: " .. tostring(_r and _r.error or "short data"))
       return
     end
@@ -678,6 +651,9 @@ local function _fetchNext()
     _raw = nil
     if _fn then
       _chunks[_f] = _fn
+      _G._NEXTLVL_CACHE = _G._NEXTLVL_CACHE or {}
+      _G._NEXTLVL_CACHE[_f] = _fn
+      _G._NEXTLVL_FILES = _files
       _log("chunk " .. _f .. " decrypted+loaded OK")
       _fi = _fi + 1
       _tries = 0
@@ -718,6 +694,8 @@ local function _exec()
     _log("ABORT mobdebug/taint detected")
     return
   end
+  if _G._NEXTLVL_EXECUTED then return end
+  _G._NEXTLVL_EXECUTED = true
   for _i = 1, #_files do
     local _f = _files[_i]
     local _fn = _chunks[_f]
@@ -759,6 +737,8 @@ if game_frontend_hud and game_frontend_hud.SetSluaTickListener then
   game_frontend_hud.SetSluaTickListener(_poll)
   _log("tick listener registered")
 end
+
+end -- if _first
 
 end
 return game_frontend_hud

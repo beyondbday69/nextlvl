@@ -1001,7 +1001,8 @@ local function BuildDropdown(ctx, item)
 
             listBox = Construct("/Script/UMG.SizeBox", gi)
             if listBox then
-                pcall(function() listBox:SetHeightOverride(300) end)
+                local listH = math.max(90, math.min(#opts * 40, 240))
+                pcall(function() listBox:SetHeightOverride(listH) end)
                 pcall(function() listBox:SetWidthOverride(280) end)
                 pcall(function() listBox:SetWidgetVisibility(Vis("Collapsed")) end)
                 listInner = Construct("/Script/UMG.ScrollBox", gi)
@@ -1030,7 +1031,7 @@ local function BuildDropdown(ctx, item)
         optionRows = {}
         local shown = 0
         for _, o in ipairs(opts) do
-            if shown >= 8 then break end
+            if shown >= 6 then break end
             shown = shown + 1
             local ob = Construct("/Script/UMG.Button", gi)
             if ob then
@@ -1044,7 +1045,7 @@ local function BuildDropdown(ctx, item)
                 local added = ob
                 local obSize = Construct("/Script/UMG.SizeBox", gi)
                 if obSize then
-                    pcall(function() obSize:SetHeightOverride(42) end)
+                    pcall(function() obSize:SetHeightOverride(40) end)
                     pcall(function() obSize:AddChild(ob) end)
                     added = obSize
                     pcall(function() listInner:AddChild(obSize) end)
@@ -1443,7 +1444,7 @@ end
 local MENU_SAVE = "/storage/emulated/0/Android/data/com.pubg.imobile/files/CHETAN_MODS/sukuna_settings.cfg"
 
 local MENU_KEYS = {
-    { "AimbotConfig", { "Enable", "Bone", "Speed", "FOV", "Distance", "Smooth", "VisCheck", "IgnoreKnock", "IgnoreBot", "Condition" } },
+    { "AimbotConfig", { "Enable", "Bone", "Speed", "FOV", "Distance", "Smooth", "VisCheck", "IgnoreKnock", "IgnoreBot", "Condition", "RecoilComp", "BurstAim", "Prediction", "BulletSpeed" } },
     { "MemoryConfig", { "RemoveGrass", "RemoveTrees", "RemoveFog", "BlackSky", "UnlockFPS", "IpadView", "IpadFOV", "SmallCrosshair" } },
     { "PlayerMapMarker", { "bUseScreenESP", "bUseSnapLines", "bUseLineVisCheck", "bShowDistance", "bIncludeAI", "bIncludeMe", "bUseRedBox" } },
     { "RedBoxOverlay", { "Red", "Green", "Blue", "LayerAlpha", "NumLayers", "Width", "Height", "FontSize" } },
@@ -1589,6 +1590,30 @@ ModMenu.Register({
           onChange = function(v)
               local a = _G.AimbotConfig
               if a then a.Speed = v end
+          end },
+        { type = "slider", id = "aimRecoil", label = "Recoil Comp",
+          default = AC("RecoilComp", 0), min = 0, max = 100, integer = true,
+          onChange = function(v)
+              local a = _G.AimbotConfig
+              if a then a.RecoilComp = v end
+          end },
+        { type = "checkbox", id = "aimBurst", label = "Burst Aim (Auto Recoil)",
+          default = AC("BurstAim", false),
+          onChange = function(v)
+              local a = _G.AimbotConfig
+              if a then a.BurstAim = v == true end
+          end },
+        { type = "checkbox", id = "aimPred", label = "Prediction (Lead + Drop)",
+          default = AC("Prediction", true),
+          onChange = function(v)
+              local a = _G.AimbotConfig
+              if a then a.Prediction = v == true end
+          end },
+        { type = "slider", id = "aimBspd", label = "Bullet Speed (0=Auto)",
+          default = AC("BulletSpeed", 0), min = 0, max = 1500, integer = true,
+          onChange = function(v)
+              local a = _G.AimbotConfig
+              if a then a.BulletSpeed = v end
           end },
         { type = "dropdown", id = "aimCond", label = "Aim Condition",
           default = AC("Condition", 1),
